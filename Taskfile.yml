@@ -1,0 +1,34 @@
+
+version: '3'
+
+tasks:
+  # Build WASM for development
+  build-dev:
+    desc: Build the project for WebGL (debug)
+    cmds:
+      - cargo build --target wasm32-unknown-unknown
+      - wasm-bindgen --target web --out-dir web target/wasm32-unknown-unknown/debug/hello-world.wasm
+    silent: false
+
+  # Build WASM for production
+  build-release:
+    desc: Build the project for WebGL (release)
+    cmds:
+      - cargo build --release --target wasm32-unknown-unknown
+      - wasm-bindgen --target web --out-dir web target/wasm32-unknown-unknown/release/hello-world.wasm
+    silent: false
+
+  # Serve the web folder using Python HTTP server
+  serve:
+    desc: Serve the `web/` folder at http://127.0.0.1:8000
+    cmds:
+      - cd web && python3 -m http.server 8000
+    silent: false
+
+  # Optional: watch and rebuild automatically
+  watch:
+    desc: Watch Rust files and rebuild WASM automatically
+    cmds:
+      - cargo install cargo-watch || true
+      - cargo watch -s "cargo build --target wasm32-unknown-unknown && wasm-bindgen --target web --out-dir web target/wasm32-unknown-unknown/debug/hello-world.wasm"
+    silent: false

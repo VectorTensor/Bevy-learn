@@ -30,11 +30,17 @@ const ARENA_HEIGHT: u32 = 100;
 
 fn main() {
     App::new()
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                // your window config
+                ..default()
+            }),
+            ..default()
+        }))
         .add_systems(Startup, setup_camera)
         .add_systems(Startup, spawn_snake)
         .add_systems(Update, snake_movement)
         .add_systems(Update, (position_translation, size_scaling))
-        .add_plugins(DefaultPlugins)
         .run();
 }
 
@@ -47,7 +53,7 @@ fn spawn_snake(mut commands: Commands) {
         .spawn((
             Sprite {
                 color: SNAKE_HEAD_COLOR,
-                custom_size: Some(Vec2::splat(10.0)),
+                custom_size: Some(Vec2::splat(50.0)),
                 ..default()
             },
             Transform::default(),
@@ -103,8 +109,7 @@ fn position_translation(
         pos / bound_game * bound_window - (bound_window / 2.0) + (tile_size / 2.0)
     }
 
-    let window = windows.single(); // There should only be one primary window
-    let window = window.unwrap();
+    let window = windows.single().expect("No primary window found"); // There should only be one primary window
 
     for (pos, mut transform) in q.iter_mut() {
         transform.translation = Vec3::new(
