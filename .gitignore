@@ -1,2 +1,5 @@
 /target
-/web
+
+web/*
+!web/
+!web/index.html
