@@ -1,75 +1,132 @@
-use bevy::prelude::*;
-#[cfg(not(target_arch = "wasm32"))]
-use bevy::sprite_render::{Wireframe2dConfig, Wireframe2dPlugin};
+use std::fs;
+
+use bevy::{
+    camera::Viewport,
+    color::palettes::{
+        basic::WHITE,
+        css::{GREEN, RED},
+    },
+    math::ops::powf,
+    prelude::*,
+};
 
 fn main() {
-    let mut app = App::new();
-    app.add_plugins((
-        DefaultPlugins,
-        #[cfg(not(target_arch = "wasm32"))]
-        Wireframe2dPlugin::default(),
-    ))
-    .add_systems(Startup, setup);
-    #[cfg(not(target_arch = "wasm32"))]
-    app.add_systems(Update, toggle_wireframe);
-    app.run();
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_systems(Startup, setup)
+        .add_systems(FixedUpdate, controls)
+        .run();
 }
 
-const X_EXTENT: f32 = 900.;
+fn controls(
+    camera_query: Single<(&mut Camera, &mut Transform, &mut Projection)>,
+    window: Single<&Window>,
+    input: Res<ButtonInput<KeyCode>>,
+    time: Res<Time<Fixed>>,
+) {
+    let (mut camera, mut transform, mut projection) = camera_query.into_inner();
+
+    let fspeed = 600.0 * time.delta_secs();
+    let uspeed = fspeed as u32;
+    let window_size = window.resolution.physical_size();
+
+    if input.pressed(KeyCode::ArrowUp) {
+        transform.translation.y += fspeed;
+    }
+
+    if input.pressed(KeyCode::ArrowDown) {
+        transform.translation.y -= fspeed;
+    }
+
+    if input.pressed(KeyCode::ArrowLeft) {
+        transform.translation.x -= fspeed;
+    }
+
+    if input.pressed(KeyCode::ArrowRight) {
+        transform.translation.x += fspeed;
+    }
+    // Camera zoom controls
+    if let Projection::Orthographic(projection2d) = &mut *projection {
+        if input.pressed(KeyCode::Comma) {
+            projection2d.scale *= powf(4.0f32, time.delta_secs());
+        }
+
+        if input.pressed(KeyCode::Period) {
+            projection2d.scale *= powf(0.25f32, time.delta_secs());
+        }
+    }
+
+    if let Some(viewport) = camera.viewport.as_mut() {
+        // Viewport movement controls
+        if input.pressed(KeyCode::KeyW) {
+            viewport.physical_position.y = viewport.physical_position.y.saturating_sub(uspeed);
+        }
+        if input.pressed(KeyCode::KeyS) {
+            viewport.physical_position.y += uspeed;
+        }
+        if input.pressed(KeyCode::KeyA) {
+            viewport.physical_position.x = viewport.physical_position.x.saturating_sub(uspeed);
+        }
+        if input.pressed(KeyCode::KeyD) {
+            viewport.physical_position.x += uspeed;
+        }
+
+        // Bound viewport position so it doesn't go off-screen
+        viewport.physical_position = viewport
+            .physical_position
+            .min(window_size - viewport.physical_size);
+
+        // Viewport size controls
+        if input.pressed(KeyCode::KeyI) {
+            viewport.physical_size.y = viewport.physical_size.y.saturating_sub(uspeed);
+        }
+        if input.pressed(KeyCode::KeyK) {
+            viewport.physical_size.y += uspeed;
+        }
+        if input.pressed(KeyCode::KeyJ) {
+            viewport.physical_size.x = viewport.physical_size.x.saturating_sub(uspeed);
+        }
+        if input.pressed(KeyCode::KeyL) {
+            viewport.physical_size.x += uspeed;
+        }
+
+        // Bound viewport size so it doesn't go off-screen
+        viewport.physical_size = viewport
+            .physical_size
+            .min(window_size - viewport.physical_position)
+            .max(UVec2::new(20, 20));
+    }
+}
 
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    window: Single<&Window>,
 ) {
-    commands.spawn(Camera2d);
+    let window_size = window.resolution.physical_size().as_vec2();
 
-    let shapes = [
-        meshes.add(Circle::new(50.0)),
-        meshes.add(CircularSector::new(50.0, 1.0)),
-        meshes.add(CircularSegment::new(50.0, 1.25)),
-        meshes.add(Ellipse::new(25.0, 50.0)),
-        meshes.add(Annulus::new(25.0, 50.0)),
-        meshes.add(Capsule2d::new(25.0, 50.0)),
-        meshes.add(Rhombus::new(75.0, 100.0)),
-        meshes.add(Rectangle::new(50.0, 100.0)),
-        meshes.add(RegularPolygon::new(50.0, 6)),
-        meshes.add(Triangle2d::new(
-            Vec2::Y * 50.0,
-            Vec2::new(-50.0, -50.0),
-            Vec2::new(50.0, -50.0),
-        )),
-        meshes.add(Segment2d::new(
-            Vec2::new(-50.0, 50.0),
-            Vec2::new(50.0, -50.0),
-        )),
-        meshes.add(Polyline2d::new(vec![
-            Vec2::new(-50.0, 50.0),
-            Vec2::new(0.0, -50.0),
-            Vec2::new(50.0, 50.0),
-        ])),
-    ];
-    let num_shapes = shapes.len();
-
-    for (i, shape) in shapes.into_iter().enumerate() {
-        // Distribute colors evenly across the rainbow.
-        let color = Color::hsl(360. * i as f32 / num_shapes as f32, 0.95, 0.7);
-
-        commands.spawn((
-            Mesh2d(shape),
-            MeshMaterial2d(materials.add(color)),
-            Transform::from_xyz(
-                // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
-                -X_EXTENT / 2. + i as f32 / (num_shapes - 1) as f32 * X_EXTENT,
-                0.0,
-                0.0,
-            ),
-        ));
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
     commands.spawn((
-        Text::new("Press space to toggle wireframes"),
+        Camera2d,
+        Camera {
+            viewport: Some(Viewport {
+                physical_position: (window_size * 0.125).as_uvec2(),
+                physical_size: (window_size * 0.75).as_uvec2(),
+                ..default()
+            }),
+            ..default()
+        },
+    ));
+
+    // Create a minimal UI explaining how to interact with the example
+    commands.spawn((
+        Text::new(
+            "Move the mouse to see the circle follow your cursor.\n\
+                    Use the arrow keys to move the camera.\n\
+                    Use the comma and period keys to zoom in and out.\n\
+                    Use the WASD keys to move the viewport.\n\
+                    Use the IJKL keys to resize the viewport.",
+        ),
         Node {
             position_type: PositionType::Absolute,
             top: px(12),
@@ -77,14 +134,16 @@ fn setup(
             ..default()
         },
     ));
-}
 
-#[cfg(not(target_arch = "wasm32"))]
-fn toggle_wireframe(
-    mut wireframe_config: ResMut<Wireframe2dConfig>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-) {
-    if keyboard.just_pressed(KeyCode::Space) {
-        wireframe_config.global = !wireframe_config.global;
-    }
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::new(100.0, 100.0))),
+        MeshMaterial2d(materials.add(Color::from(RED))),
+    ));
+
+    // Add background to visualize viewport bounds
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::new(50000.0, 50000.0))),
+        MeshMaterial2d(materials.add(Color::linear_rgb(0.1, 0.1, 0.1))),
+        Transform::from_translation(Vec3::new(0.0, 0.0, -200.)),
+    ));
 }
