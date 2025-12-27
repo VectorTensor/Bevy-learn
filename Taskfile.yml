@@ -2,12 +2,16 @@
 version: '3'
 
 tasks:
+  # Update Assets
+  assets-update:
+    desc: Update Changes in assets
+    cmds:
+      - rm -rf  web/assets
+      - cp -r assets/ web/
   # Build WASM for development
   build-dev:
     desc: Build the project for WebGL (debug)
     cmds:
-      - rm -rf  web/assets
-      - cp -r assets/ web/
       - cargo build --target wasm32-unknown-unknown
       - wasm-bindgen --target web --out-dir web target/wasm32-unknown-unknown/debug/hello-world.wasm
     silent: false
@@ -16,8 +20,6 @@ tasks:
   build-release:
     desc: Build the project for WebGL (release)
     cmds:
-      - rm -rf  web/assets
-      - cp -r  assets/ web/
       - cargo build --release --target wasm32-unknown-unknown
       - wasm-bindgen --target web --out-dir web target/wasm32-unknown-unknown/release/hello-world.wasm
     silent: false
